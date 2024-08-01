@@ -108,3 +108,4 @@ swagger-output.json
 **/*.pem
 
 .vscode
+data/

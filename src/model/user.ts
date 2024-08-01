@@ -1,5 +1,6 @@
+import { createJWTToken } from '@/util/jwt';
 import { Snowflake } from 'discord.js';
-import { Model, Schema, model } from 'mongoose';
+import { HydratedDocument, Model, Schema, model } from 'mongoose';
 
 const userSchema = new Schema<IUser, UserModelType, IUserMethods>({
   id: { type: String, required: true },
@@ -21,7 +22,7 @@ const userSchema = new Schema<IUser, UserModelType, IUserMethods>({
 });
 
 userSchema.methods.generateJWT = function () {
-  return '';
+  return createJWTToken(this.id);
 };
 
 userSchema.methods.getAuthInfo = function () {
@@ -29,17 +30,12 @@ userSchema.methods.getAuthInfo = function () {
 };
 
 userSchema.methods.getPublicInfo = function () {
-  return {
-    id: this.id,
-    name: this.name,
-    avatar: this.avatar,
-    mcUUID: this.mcUUID,
-  };
+  return { id: this.id, name: this.name, mcUUID: this.mcUUID };
 };
 
-export const UserModule = model<IUser>('User', userSchema);
+export const User = model<IUser, UserModelType>('User', userSchema);
 
-export default UserModule;
+export default User;
 
 export interface IPublicUser {
   id: Snowflake;
@@ -49,7 +45,7 @@ export interface IPublicUser {
 }
 
 export interface IAuthUser extends IPublicUser {
-  email: string;
+  email?: string;
 }
 
 export interface IUser extends IAuthUser {}
@@ -60,4 +56,6 @@ export interface IUserMethods {
   getPublicInfo(): IPublicUser;
 }
 
-type UserModelType = Model<IUser, unknown, IUserMethods>;
+// eslint-disable-next-line @typescript-eslint/ban-types
+export type UserModelType = Model<IUser, {}, IUserMethods>;
+export type UserDocument = HydratedDocument<IUser, IUserMethods>;

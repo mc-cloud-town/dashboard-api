@@ -7,8 +7,10 @@ import {
   RESTPostOAuth2AccessTokenURLEncodedData,
 } from 'discord.js';
 
-import { DiscordBot } from '@/service';
+import { DiscordBot, logger } from '@/service';
 import { ResponseStatusCode, sendRes } from '#/utils';
+import User from '@/model/user';
+import { createJWTToken } from '@/util/jwt';
 
 const router = Router();
 
@@ -96,16 +98,52 @@ router.get('/callback', async (req, res) => {
 
       const bot = DiscordBot.getBot(req);
 
-      if (await bot.hasCTECMember(accountInfo?.id)) {
-        sendRes(res, {
-          code: ResponseStatusCode.SUCCESS,
-          data: { ...accountInfo, ...accessInfo },
-        });
+      if (accountInfo && (await bot.hasCTECMember(accountInfo.id))) {
+        const { id, username, email } = accountInfo;
+        let user = await User.findOne({ id: accountInfo.id });
+
+        if (user) {
+          // Update email
+          if (user.email !== email) {
+            user.email = email ?? void 0;
+            await user.save();
+          }
+        } else {
+          const avatar = await axios
+            .get(
+              `https://cdn.discordapp.com/avatars/${id}/${accountInfo.avatar}.png`,
+              { responseType: 'arraybuffer' },
+            )
+            .then((response) => Buffer.from(response.data, 'binary'));
+
+          user = await User.create({
+            avatar,
+            id: id,
+            name: username,
+            email: email ?? void 0,
+          });
+        }
+
+        sendRes(
+          res,
+          {
+            code: ResponseStatusCode.SUCCESS,
+            data: {
+              token: createJWTToken(accountInfo.id),
+              user: user.getAuthInfo(),
+            },
+          },
+          StatusCodes.OK,
+        );
         return;
       }
     }
-  } catch (_error) {
-    /* empty */
+  } catch (error) {
+    if (error instanceof Error) {
+      logger.error(error.message);
+    } else {
+      logger.error(error);
+    }
   }
 
   sendRes(
