@@ -1,29 +1,26 @@
-import axios from 'axios';
 import { Router } from 'express';
 import { StatusCodes } from 'http-status-codes';
-
 import { ResponseStatusCode, sendRes } from '#/utils';
+import { Oauth2, Oauth2Type } from './_oauth';
+
+import User from '@/model/user';
+import { DiscordBot } from '@/service';
 
 const router = Router();
 
-const clientID = process.env.GOOGLE_OAUTH_ID ?? '';
-const clientSecret = process.env.GOOGLE_OAUTH_SECRET ?? '';
-const REDIRECT_URL = process.env.GOOGLE_OAUTH_REDIRECT_URL ?? '';
+const CLIENT_ID = process.env.GOOGLE_OAUTH_ID;
+const CLIENT_SECRET = process.env.GOOGLE_OAUTH_SECRET;
+const REDIRECT_URL = process.env.GOOGLE_OAUTH_REDIRECT_URL;
 
-const GOOGLE_AUTH_URL_PREFIX = 'https://accounts.google.com/o/oauth2/auth';
-const GOOGLE_BASE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const GOOGLE_BASE_SCOPE_URI = 'https://www.googleapis.com/auth/';
-const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v2/userinfo';
-const GOOGLE_AUTH_SCOPE = `${GOOGLE_BASE_SCOPE_URI}userinfo.profile ${GOOGLE_BASE_SCOPE_URI}userinfo.email`;
-const GOOGLE_AUTH_URL_LOGIN = `${GOOGLE_AUTH_URL_PREFIX}?${new URLSearchParams({
-  client_id: clientID,
-  scope: GOOGLE_AUTH_SCOPE,
-  response_type: 'code',
-  redirect_uri: REDIRECT_URL,
-}).toString()}`;
+const GOOGLE_OAUTH2 = new Oauth2(Oauth2Type.GOOGLE, {
+  clientID: CLIENT_ID ?? '',
+  redirectURI: REDIRECT_URL ?? '',
+  clientSecret: CLIENT_SECRET ?? '',
+  scopes: ['userinfo.email'],
+});
 
 router.get('/login', (_req, res) => {
-  if (!clientSecret || !clientID) {
+  if (!CLIENT_SECRET || !CLIENT_ID) {
     sendRes(
       res,
       { code: ResponseStatusCode.GET_AUTH_URL_ERROR },
@@ -34,7 +31,7 @@ router.get('/login', (_req, res) => {
 
   sendRes(res, {
     code: ResponseStatusCode.SUCCESS,
-    data: GOOGLE_AUTH_URL_LOGIN,
+    data: GOOGLE_OAUTH2.AUTH_URL,
   });
 });
 
@@ -54,7 +51,7 @@ router.get('/callback', async (req, res) => {
     return;
   }
 
-  if (!clientSecret || !clientID) {
+  if (!CLIENT_SECRET || !CLIENT_ID) {
     sendRes(
       res,
       { code: ResponseStatusCode.OAUTH_CODE_CALLBACK_ERROR },
@@ -63,32 +60,40 @@ router.get('/callback', async (req, res) => {
     return;
   }
 
-  try {
-    const responseAccessInfo = await axios.postForm(GOOGLE_BASE_TOKEN_URL, {
-      code,
-      client_id: clientID,
-      redirect_uri: REDIRECT_URL,
-      client_secret: clientSecret,
-      grant_type: 'authorization_code',
-    });
-    const accessInfo = responseAccessInfo.data;
-    if (accessInfo.access_token) {
-      const accountInfo = await axios.get(GOOGLE_USERINFO_URL, {
-        headers: {
-          Authorization: `${accessInfo.token_type} ${accessInfo.access_token}`,
-        },
-      });
+  const { data: accessInfo } = await GOOGLE_OAUTH2.getAccessToken(code);
+  if (accessInfo?.access_token) {
+    const { data: accountInfo } = await GOOGLE_OAUTH2.getUserInfo(accessInfo);
 
-      sendRes(res, {
-        code: ResponseStatusCode.SUCCESS,
-        data: {
-          ...accountInfo.data,
-        },
-      });
-      return;
+    const googleEmail = accountInfo?.email;
+    if (googleEmail) {
+      const bot = DiscordBot.getBot(req);
+      const user = await User.findOne({ googleEmail });
+
+      if (user) {
+        if (await bot.hasCTECMember(user.id)) {
+          if (user.verifiedEmail) {
+            sendRes(res, {
+              code: ResponseStatusCode.SUCCESS,
+              data: {
+                token: user.generateJWT(),
+                user: user.getPublicInfo(),
+              },
+            });
+          } else {
+            sendRes(
+              res,
+              {
+                code: ResponseStatusCode.AUTH_EMAIL_NOT_VERIFIED,
+                data: 'Please verify your email first',
+              },
+              StatusCodes.BAD_REQUEST,
+            );
+          }
+          return;
+        }
+        await user.deleteOne();
+      }
     }
-  } catch (_error) {
-    /* empty */
   }
 
   sendRes(

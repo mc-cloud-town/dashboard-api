@@ -1,39 +1,28 @@
-import axios, { AxiosRequestConfig } from 'axios';
+import axios from 'axios';
 import { Router } from 'express';
 import { StatusCodes } from 'http-status-codes';
-import {
-  APIUser,
-  RESTPostOAuth2AccessTokenResult,
-  RESTPostOAuth2AccessTokenURLEncodedData,
-} from 'discord.js';
 
 import { DiscordBot, logger } from '@/service';
 import { ResponseStatusCode, sendRes } from '#/utils';
 import User from '@/model/user';
 import { createJWTToken } from '@/util/jwt';
+import { Oauth2, Oauth2Type } from './_oauth';
 
 const router = Router();
 
-const clientID = process.env.DISCORD_OAUTH_ID;
-const clientSecret = process.env.DISCORD_OAUTH_SECRET;
+const CLIENT_ID = process.env.DISCORD_OAUTH_ID;
 const REDIRECT_URL = process.env.DISCORD_OAUTH_REDIRECT_URL;
+const CLIENT_SECRET = process.env.DISCORD_OAUTH_SECRET;
 
-const DISCORD_AUTH_URL_PREFIX = 'https://discord.com/oauth2/authorize';
-const DISCORD_BASE_TOKEN_URL = 'https://discord.com/api/oauth2/token';
-const DISCORD_USERINFO_URL = 'https://discord.com/api/users/@me';
-const DISCORD_AUTH_SCOPE = 'email'; // identify
-const DISCORD_AUTH_URL_LOGIN = `${DISCORD_AUTH_URL_PREFIX}?${new URLSearchParams(
-  {
-    client_id: clientID ?? '',
-    scope: DISCORD_AUTH_SCOPE ?? '',
-    response_type: 'code',
-    redirect_uri: REDIRECT_URL ?? '',
-    prompt: 'consent',
-  },
-).toString()}`;
+const DISCORD_OAUTH2 = new Oauth2(Oauth2Type.DISCORD, {
+  clientID: CLIENT_ID ?? '',
+  redirectURI: REDIRECT_URL ?? '',
+  clientSecret: CLIENT_SECRET ?? '',
+  scopes: ['email'],
+});
 
 router.get('/login', (_req, res) => {
-  if (!clientSecret || !clientID) {
+  if (!CLIENT_SECRET || !CLIENT_ID) {
     sendRes(
       res,
       { code: ResponseStatusCode.GET_AUTH_URL_ERROR },
@@ -44,7 +33,7 @@ router.get('/login', (_req, res) => {
 
   sendRes(res, {
     code: ResponseStatusCode.SUCCESS,
-    data: DISCORD_AUTH_URL_LOGIN,
+    data: DISCORD_OAUTH2.AUTH_URL,
   });
 });
 
@@ -57,14 +46,26 @@ router.get('/callback', async (req, res) => {
       res,
       {
         code: ResponseStatusCode.OAUTH_CODE_CALLBACK_ERROR,
-        data: 'Missing code or redirect URI',
+        data: 'Missing code',
       },
       StatusCodes.BAD_REQUEST,
     );
     return;
   }
 
-  if (!clientSecret || !clientID) {
+  if (typeof req.query.error === 'string') {
+    sendRes(
+      res,
+      {
+        code: ResponseStatusCode.OAUTH_CODE_CALLBACK_ERROR,
+        data: req.query.error,
+      },
+      StatusCodes.BAD_REQUEST,
+    );
+    return;
+  }
+
+  if (!CLIENT_SECRET || !CLIENT_ID) {
     sendRes(
       res,
       { code: ResponseStatusCode.OAUTH_CODE_CALLBACK_ERROR },
@@ -73,57 +74,52 @@ router.get('/callback', async (req, res) => {
     return;
   }
 
-  try {
-    const { data: accessInfo } = await axios.postForm<
-      RESTPostOAuth2AccessTokenResult,
-      AxiosRequestConfig<RESTPostOAuth2AccessTokenResult>,
-      RESTPostOAuth2AccessTokenURLEncodedData
-    >(DISCORD_BASE_TOKEN_URL, {
-      code,
-      client_id: clientID,
-      redirect_uri: REDIRECT_URL,
-      client_secret: clientSecret,
-      grant_type: 'authorization_code',
-    });
+  const { data: accessInfo } = await DISCORD_OAUTH2.getAccessToken(code);
+  if (accessInfo) {
+    const bot = DiscordBot.getBot(req);
+    const { data: accountInfo } = await DISCORD_OAUTH2.getUserInfo(accessInfo);
 
-    if (accessInfo) {
-      const { data: accountInfo } = await axios.get<APIUser>(
-        DISCORD_USERINFO_URL,
-        {
-          headers: {
-            Authorization: `${accessInfo.token_type} ${accessInfo.access_token}`,
+    if (accountInfo) {
+      if (!(await bot.hasCTECMember(accountInfo.id))) {
+        sendRes(
+          res,
+          {
+            code: ResponseStatusCode.NOT_CTEC_MEMBER,
+            data: 'Not is CTEC Member',
           },
-        },
-      );
+          StatusCodes.FORBIDDEN,
+        );
+        return;
+      }
+      const { id, email, username, global_name } = accountInfo;
+      let user = await User.findOne({ id: accountInfo.id });
 
-      const bot = DiscordBot.getBot(req);
-
-      if (accountInfo && (await bot.hasCTECMember(accountInfo.id))) {
-        const { id, username, email } = accountInfo;
-        let user = await User.findOne({ id: accountInfo.id });
-
-        if (user) {
-          // Update email
-          if (user.email !== email) {
-            user.email = email ?? void 0;
-            await user.save();
-          }
-        } else {
-          const avatar = await axios
+      if (!user) {
+        let avatar: Buffer | undefined;
+        if (accountInfo.avatar) {
+          avatar = await axios
             .get(
               `https://cdn.discordapp.com/avatars/${id}/${accountInfo.avatar}.png`,
               { responseType: 'arraybuffer' },
             )
-            .then((response) => Buffer.from(response.data, 'binary'));
-
-          user = await User.create({
-            avatar,
-            id: id,
-            name: username,
-            email: email ?? void 0,
-          });
+            .then(({ data }) => Buffer.from(data, 'binary'))
+            .catch(() => void 0);
         }
 
+        try {
+          user = await User.create({
+            id,
+            avatar,
+            name: username,
+            showName: global_name,
+            email: email ?? void 0,
+          });
+        } catch (e) {
+          logger.error(e);
+        }
+      }
+
+      if (user) {
         sendRes(
           res,
           {
@@ -135,14 +131,8 @@ router.get('/callback', async (req, res) => {
           },
           StatusCodes.OK,
         );
-        return;
       }
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      logger.error(error.message);
-    } else {
-      logger.error(error);
+      return;
     }
   }
 

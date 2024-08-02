@@ -11,6 +11,7 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "lint": " eslint src/**/*.ts --fix --max-warnings 0",
+    "lint:check": " eslint src/**/*.ts --max-warnings 0",
     "format": "prettier . --write --ignore-unknown",
     "format:check": "prettier . --check --ignore-unknown",
     "prepare": "husky"
@@ -72,6 +73,6 @@
     "splitting": false,
     "sourcemap": false,
     "clean": true,
-    "minify": true
+    "minify": false
   }
 }

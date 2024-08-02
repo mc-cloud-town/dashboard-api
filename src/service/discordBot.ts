@@ -35,11 +35,7 @@ export class DiscordBot extends Client {
 
     let user = members.cache.get(userID);
     if (!user) {
-      try {
-        user = await members.fetch(userID);
-      } catch (error) {
-        return false;
-      }
+      user = await members.fetch(userID).catch(() => void 0);
     }
 
     if (user) {
