@@ -103,7 +103,7 @@ dist
 # TernJS port file
 .tern-port
 
-# Lipoic backend custom files
+# CTEC backend custom files
 swagger-output.json
 **/*.pem
 

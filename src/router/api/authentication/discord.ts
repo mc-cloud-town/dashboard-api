@@ -22,7 +22,16 @@ const DISCORD_OAUTH2 = new Oauth2(Oauth2Type.DISCORD, {
 });
 
 router.get('/login', (_req, res) => {
+  // #swagger.description = 'Get Discord OAuth URL.';
+
   if (!CLIENT_SECRET || !CLIENT_ID) {
+    /* #swagger.responses[500] = {
+      description: 'Internal server error',
+      schema: {
+        code: 2,
+      },
+    }; */
+
     sendRes(
       res,
       { code: ResponseStatusCode.GET_AUTH_URL_ERROR },
@@ -31,6 +40,13 @@ router.get('/login', (_req, res) => {
     return;
   }
 
+  /* #swagger.responses[200] = {
+    description: 'Get Discord OAuth URL.',
+    schema: {
+      code: 0,
+      data: 'https://discord.com/api/oauth2/authorize?client_id=CLIENT_ID&redirect_uri=REDIRECT_URL&response_type=code&scope=identify%20email',
+    },
+  }; */
   sendRes(res, {
     code: ResponseStatusCode.SUCCESS,
     data: DISCORD_OAUTH2.AUTH_URL,
@@ -42,6 +58,14 @@ router.get('/callback', async (req, res) => {
   // const locale = req.query.locale;
 
   if (typeof code !== 'string') {
+    /* #swagger.responses[400] = {
+      description: 'Not found code in query',
+      schema: {
+        code: 3,
+        data: 'Missing code',
+      },
+    }; */
+
     sendRes(
       res,
       {
@@ -54,6 +78,14 @@ router.get('/callback', async (req, res) => {
   }
 
   if (typeof req.query.error === 'string') {
+    /* #swagger.responses[400] = {
+      description: 'Found error in query',
+      schema: {
+        code: 3,
+        data: '<discord response error>',
+      },
+    }; */
+
     sendRes(
       res,
       {
@@ -66,6 +98,13 @@ router.get('/callback', async (req, res) => {
   }
 
   if (!CLIENT_SECRET || !CLIENT_ID) {
+    /* #swagger.responses[500] = {
+      description: 'Internal server error',
+      schema: {
+        code: 2,
+      },
+    }; */
+
     sendRes(
       res,
       { code: ResponseStatusCode.OAUTH_CODE_CALLBACK_ERROR },
@@ -81,6 +120,14 @@ router.get('/callback', async (req, res) => {
 
     if (accountInfo) {
       if (!(await bot.hasCTECMember(accountInfo.id))) {
+        /* #swagger.responses[403] = {
+          description: 'Not is CTEC Member',
+          schema: {
+            code: 6,
+            data: 'Not is CTEC Member',
+          },
+        }; */
+
         sendRes(
           res,
           {
@@ -120,22 +167,41 @@ router.get('/callback', async (req, res) => {
       }
 
       if (user) {
-        sendRes(
-          res,
-          {
-            code: ResponseStatusCode.SUCCESS,
+        /* #swagger.responses[200] = {
+          description: 'Success',
+          schema: {
+            code: 0,
             data: {
-              token: createJWTToken(accountInfo.id),
-              user: user.getAuthInfo(),
+              token: 'JWT_TOKEN',
+              user: {
+                id: 'USER_ID',
+                name: 'USER_NAME',
+                email: 'USER_EMAIL',
+                avatar: 'USER_AVATAR',
+              },
             },
           },
-          StatusCodes.OK,
-        );
+        }; */
+
+        sendRes(res, {
+          code: ResponseStatusCode.SUCCESS,
+          data: {
+            token: createJWTToken(accountInfo.id),
+            user: user.getAuthInfo(),
+          },
+        });
       }
       return;
     }
   }
 
+  /* #swagger.responses[400] = {
+    description: 'Not found access token',
+    schema: {
+      code: 3,
+      data: 'Missing access token',
+    },
+  }; */
   sendRes(
     res,
     { code: ResponseStatusCode.AUTH_ERROR },

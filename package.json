@@ -7,13 +7,14 @@
   "license": "GPL-3.0",
   "private": true,
   "scripts": {
-    "dev": "nodemon",
+    "dev": "yarn swagger && concurrently \"nodemon -x yarn swagger\" \"nodemon\"",
     "build": "tsup",
     "start": "node dist/index.js",
     "lint": " eslint src/**/*.ts --fix --max-warnings 0",
     "lint:check": " eslint src/**/*.ts --max-warnings 0",
     "format": "prettier . --write --ignore-unknown",
     "format:check": "prettier . --check --ignore-unknown",
+    "swagger": "ts-node script/swagger.ts",
     "prepare": "husky"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "mongoose": "^8.5.1",
     "morgan": "^1.10.0",
     "nodemailer": "^6.9.14",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.13.1"
   },
   "devDependencies": {
@@ -39,14 +41,17 @@
     "@types/jsonwebtoken": "^9.0.6",
     "@types/mongoose": "^5.11.97",
     "@types/morgan": "^1.9.9",
+    "@types/swagger-ui-express": "^4.1.6",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
+    "concurrently": "^8.2.2",
     "crypto": "^1.0.1",
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^9.1.0",
     "husky": "^9.1.4",
     "nodemon": "^3.1.4",
     "prettier": "^3.3.3",
+    "swagger-autogen": "^2.23.7",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tscpaths": "^0.0.9",
@@ -55,11 +60,11 @@
     "typescript-eslint": "^7.18.0"
   },
   "nodemonConfig": {
-    "exec": "ts-node src/index.ts",
+    "exec": "ts-node src",
     "ext": "ts",
     "watch": [
       "src",
-      ".env.dev"
+      ".env"
     ],
     "delay": "2"
   },

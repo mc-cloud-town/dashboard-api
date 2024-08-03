@@ -20,6 +20,8 @@ const GOOGLE_OAUTH2 = new Oauth2(Oauth2Type.GOOGLE, {
 });
 
 router.get('/login', (_req, res) => {
+  // #swagger.description = 'Get Google OAuth URL.';
+
   if (!CLIENT_SECRET || !CLIENT_ID) {
     sendRes(
       res,
@@ -29,6 +31,13 @@ router.get('/login', (_req, res) => {
     return;
   }
 
+  /* #swagger.responses[200] = {
+    description: 'Get Google OAuth URL.',
+    schema: {
+      code: 0,
+      data: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=CLIENT_ID&redirect_uri=REDIRECT_URL&response_type=code&scope=https://www.googleapis.com/auth/userinfo.email',
+    }
+  }; */
   sendRes(res, {
     code: ResponseStatusCode.SUCCESS,
     data: GOOGLE_OAUTH2.AUTH_URL,

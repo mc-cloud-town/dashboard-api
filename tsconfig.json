@@ -24,7 +24,7 @@
     "pretty": true,
     "sourceMap": true
   },
-  "include": ["src/**/*.ts", "types.d.ts"],
+  "include": ["src/**/*.ts", "script/**/*.ts", "types.d.ts"],
   "exclude": ["node_modules"],
   "files": ["types.d.ts"],
   "ts-node": {

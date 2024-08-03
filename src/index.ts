@@ -28,8 +28,7 @@ main();
 if (process.env.NODE_ENV === 'production') {
   process
     .on('uncaughtException', (err) => {
-      if (err instanceof Error) logger.error(err.message);
-      else logger.error(err);
+      logger.error(err.message);
     })
     .on('unhandledRejection', (err) => {
       if (err instanceof Error) logger.error(err.message);
