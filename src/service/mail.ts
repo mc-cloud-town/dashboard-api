@@ -62,3 +62,49 @@ export async function sendPass2Email(
   };
   await getTransport().sendMail(mailOptions);
 }
+
+export async function sendPass1Email(
+  name: string,
+  email: string,
+  locale: string = 'zh-TW',
+) {
+  const from = process.env.EMAIL_FROM || '雲鎮 工藝 <admin@mc-ctec.org>';
+  const subject: { [key: string]: string } = {
+    'en-US': 'CloudTown process audit notice',
+    'zh-TW': '雲鎮工藝審核通知',
+  };
+
+  const mailOptions: SendMailOptions = {
+    from,
+    to: email,
+    subject: subject[locale],
+    html: await readMailTemplate('pass-1', 'zh-TW', {
+      seed: process.env.WORLD_SEED || '-',
+      dcName: name,
+    }),
+  };
+  await getTransport().sendMail(mailOptions);
+}
+
+export async function sendFail1Email(
+  name: string,
+  email: string,
+  locale: string = 'zh-TW',
+) {
+  const from = process.env.EMAIL_FROM || '雲鎮 工藝 <admin@mc-ctec.org>';
+  const subject: { [key: string]: string } = {
+    'en-US': 'CloudTown process audit notice',
+    'zh-TW': '雲鎮工藝審核通知',
+  };
+
+  const mailOptions: SendMailOptions = {
+    from,
+    to: email,
+    subject: subject[locale],
+    html: await readMailTemplate('fail-1', 'zh-TW', {
+      seed: process.env.WORLD_SEED || '-',
+      dcName: name,
+    }),
+  };
+  await getTransport().sendMail(mailOptions);
+}
